@@ -1,0 +1,41 @@
+{
+  "buyurtmalar": [
+    {
+      "_id": "1766593101087",
+      "mijoz": "hu  ",
+      "yonalish": "Toshkent-Andijon",
+      "holati": "Tugallandi",
+      "haydovchi": "Ahror Azimov"
+    },
+    {
+      "_id": "1766596169262",
+      "mijoz": "ahror",
+      "yonalish": "Toshkent-Samarqand",
+      "mijozLoc": {
+        "lat": 40.9799,
+        "lon": 71.66
+      },
+      "holati": "Qabul qilindi",
+      "vagt": "24/12/2025, 22:09:29",
+      "haydovchi": "Ahror Azimov",
+      "haydovchiLoc": {
+        "lat": 40.9799,
+        "lon": 71.66
+      }
+    }
+  ],
+  "haydovchilar": [
+    {
+      "_id": "1765999711693",
+      "ism": "Ahror Azimov",
+      "mashina": "Malibu 2 premier",
+      "tel": "+998880481199"
+    },
+    {
+      "_id": "1765999786611",
+      "ism": "jasur",
+      "mashina": "gentra ",
+      "tel": "+9989999999999"
+    }
+  ]
+}
