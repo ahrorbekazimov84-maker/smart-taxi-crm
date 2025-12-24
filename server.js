@@ -14,6 +14,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, '.')));
 
 const DATA_FILE = './baza.json';
+const ADMIN_PASSWORD = "taxi777"; // Admin paroli
 
 const oqish = () => {
     try {
@@ -25,18 +26,25 @@ const oqish = () => {
 
 const saqlash = (data) => fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 
+// Admin login tekshiruvi
+app.post('/admin/login', (req, res) => {
+    if (req.body.password === ADMIN_PASSWORD) res.json({ status: "ok" });
+    else res.status(401).json({ status: "xato" });
+});
+
 app.get('/admin/buyurtmalar', (req, res) => res.json(oqish().buyurtmalar));
 
-// 1. Yangi buyurtma yaratish
 app.post('/buyurtma/berish', (req, res) => {
     const data = oqish();
     const yangi = {
         _id: Date.now().toString(),
         mijoz: req.body.ism,
+        tel: req.body.tel, // Telefon raqami qo'shildi
         yonalish: req.body.yonalish,
         mijozLoc: req.body.mijozLoc,
         holati: 'Kutilmoqda',
         haydovchi: null,
+        haydovchiLoc: null,
         vaqt: new Date().toLocaleTimeString('uz-UZ')
     };
     data.buyurtmalar.push(yangi);
@@ -45,7 +53,6 @@ app.post('/buyurtma/berish', (req, res) => {
     res.json(yangi);
 });
 
-// 2. Haydovchi buyurtmani qabul qilishi (Status: Yo'lda)
 app.post('/buyurtma/qabul', (req, res) => {
     const { orderId, haydovchiIsm, haydovchiLoc } = req.body;
     let data = oqish();
@@ -55,12 +62,14 @@ app.post('/buyurtma/qabul', (req, res) => {
         order.haydovchi = haydovchiIsm;
         order.haydovchiLoc = haydovchiLoc;
         saqlash(data);
+        // SMS logikasi (Simulyatsiya)
+        console.log(`SMS: ${order.tel} raqamiga yuborildi: Haydovchi ${haydovchiIsm} yo'lga chiqdi!`);
         io.emit('yangilash_chiqdi');
+        io.emit('haydovchi_harakati', { orderId, loc: haydovchiLoc });
         res.json({ status: "ok", mijozLoc: order.mijozLoc });
     }
 });
 
-// 3. Haydovchi manzilga yetib borishi (Status: Yetkazildi)
 app.post('/buyurtma/yakunlash', (req, res) => {
     const { orderId } = req.body;
     let data = oqish();
@@ -83,4 +92,3 @@ app.delete('/admin/buyurtma/:id', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Server running on ${PORT}`));
-
