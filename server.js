@@ -27,6 +27,7 @@ const saqlash = (data) => fs.writeFileSync(DATA_FILE, JSON.stringify(data, null,
 
 app.get('/admin/buyurtmalar', (req, res) => res.json(oqish().buyurtmalar));
 
+// 1. Yangi buyurtma yaratish
 app.post('/buyurtma/berish', (req, res) => {
     const data = oqish();
     const yangi = {
@@ -35,6 +36,7 @@ app.post('/buyurtma/berish', (req, res) => {
         yonalish: req.body.yonalish,
         mijozLoc: req.body.mijozLoc,
         holati: 'Kutilmoqda',
+        haydovchi: null,
         vaqt: new Date().toLocaleTimeString('uz-UZ')
     };
     data.buyurtmalar.push(yangi);
@@ -43,17 +45,31 @@ app.post('/buyurtma/berish', (req, res) => {
     res.json(yangi);
 });
 
+// 2. Haydovchi buyurtmani qabul qilishi (Status: Yo'lda)
 app.post('/buyurtma/qabul', (req, res) => {
     const { orderId, haydovchiIsm, haydovchiLoc } = req.body;
     let data = oqish();
     const order = data.buyurtmalar.find(b => b._id === orderId);
     if (order) {
-        order.holati = 'Qabul qilindi';
+        order.holati = "Yo'lda";
         order.haydovchi = haydovchiIsm;
         order.haydovchiLoc = haydovchiLoc;
         saqlash(data);
         io.emit('yangilash_chiqdi');
         res.json({ status: "ok", mijozLoc: order.mijozLoc });
+    }
+});
+
+// 3. Haydovchi manzilga yetib borishi (Status: Yetkazildi)
+app.post('/buyurtma/yakunlash', (req, res) => {
+    const { orderId } = req.body;
+    let data = oqish();
+    const order = data.buyurtmalar.find(b => b._id === orderId);
+    if (order) {
+        order.holati = 'Yetkazildi';
+        saqlash(data);
+        io.emit('yangilash_chiqdi');
+        res.json({ status: "ok" });
     }
 });
 
@@ -66,5 +82,5 @@ app.delete('/admin/buyurtma/:id', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
+server.listen(PORT, () => console.log(`Server running on ${PORT}`));
 
