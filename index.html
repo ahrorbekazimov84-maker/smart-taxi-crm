@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Yandex Go Professional</title>
+    <title>Yandex Taxi CRM</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="/socket.io/socket.io.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -14,24 +14,24 @@
         .page.active { display: flex; flex-direction: column; }
         #map { flex-grow: 1; width: 100%; z-index: 1; }
         .bottom-sheet { background: white; border-radius: 24px 24px 0 0; padding: 20px; box-shadow: 0 -10px 25px rgba(0,0,0,0.1); z-index: 100; }
-        .yandex-btn { background: #ffcc00; color: #000; font-weight: 700; padding: 16px; border-radius: 16px; width: 100%; }
-        .input-group { background: #f0f0f0; border-radius: 12px; padding: 12px; margin-bottom: 10px; display: flex; align-items: center; }
-        .input-group input, .input-group select { background: transparent; width: 100%; outline: none; border: none; font-size: 16px; margin-left: 10px; }
+        .yandex-btn { background: #ffcc00; color: #000; font-weight: 800; padding: 18px; border-radius: 18px; width: 100%; }
+        .input-group { background: #f0f0f0; border-radius: 12px; padding: 14px; margin-bottom: 10px; display: flex; align-items: center; }
+        .input-group select { background: transparent; width: 100%; outline: none; border: none; font-size: 16px; font-weight: 600; }
     </style>
 </head>
 <body>
 
     <div id="home-page" class="page active bg-black text-white justify-center p-8">
-        <h1 class="text-4xl font-black mb-10 italic">Yandex Go</h1>
-        <div onclick="showLogin('passenger')" class="bg-zinc-900 p-6 rounded-2xl mb-4 flex items-center gap-4 border-l-4 border-yellow-400">
+        <h1 class="text-4xl font-black mb-12 italic">Yandex Go</h1>
+        <div onclick="showLogin('passenger')" class="bg-zinc-900 p-6 rounded-3xl mb-4 flex items-center gap-4 border-l-4 border-yellow-400 active:scale-95 transition">
             <span class="text-3xl">📱</span>
             <div><b class="text-lg block">Yo'lovchi</b><p class="text-xs text-gray-500">Mashina chaqirish</p></div>
         </div>
-        <div onclick="showLogin('driver')" class="bg-zinc-900 p-6 rounded-2xl mb-10 flex items-center gap-4 border-l-4 border-white">
+        <div onclick="showLogin('driver')" class="bg-zinc-900 p-6 rounded-3xl mb-12 flex items-center gap-4 border-l-4 border-white active:scale-95 transition">
             <span class="text-3xl">🚕</span>
-            <div><b class="text-lg block">Haydovchi</b><p class="text-xs text-gray-500">Pul ishlash</p></div>
+            <div><b class="text-lg block">Haydovchi</b><p class="text-xs text-gray-500">Buyurtma qidirish</p></div>
         </div>
-        <button onclick="showLogin('admin')" class="text-gray-500 underline text-sm w-full text-center">Admin panel</button>
+        <button onclick="showLogin('admin')" class="text-gray-500 underline text-sm w-full">Admin panel</button>
     </div>
 
     <div id="login-page" class="page p-6">
@@ -42,14 +42,14 @@
     <div id="main-dashboard" class="page">
         <div id="map"></div>
         <div class="bottom-sheet">
-            <div class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4"></div>
+            <div class="w-10 h-1.5 bg-gray-300 rounded-full mx-auto mb-6"></div>
             <div id="app-content"></div>
         </div>
     </div>
 
     <script>
         const socket = io();
-        let currentRole = '', userTel = '', sentOTP = '', map;
+        let currentRole = '', userTel = '', sentOTP = '', map, markers = {};
 
         function showLogin(role) {
             currentRole = role;
@@ -58,16 +58,16 @@
             const container = document.getElementById('auth-container');
 
             if(role === 'admin') {
-                container.innerHTML = `<h2 class="text-2xl font-bold mb-6">Admin Login</h2>
-                    <div class="input-group">👤<input id="adm_login" type="text" placeholder="Login"></div>
-                    <div class="input-group">🔒<input id="adm_pass" type="password" placeholder="Parol"></div>
-                    <button onclick="loginAdmin()" class="yandex-btn mt-4">KIRISH</button>`;
+                container.innerHTML = `<h2 class="text-2xl font-bold mb-6">Boshqaruv</h2>
+                    <div class="input-group">👤<input id="adm_login" type="text" placeholder="Login" class="ml-2 bg-transparent outline-none"></div>
+                    <div class="input-group">🔒<input id="adm_pass" type="password" placeholder="Parol" class="ml-2 bg-transparent outline-none"></div>
+                    <button onclick="loginAdmin()" class="yandex-btn mt-4 shadow-xl">KIRISH</button>`;
             } else {
-                container.innerHTML = `<h2 class="text-2xl font-bold mb-2">${role==='driver'?'Haydovchi':'Yo\'lovchi'}</h2>
-                    <p class="text-gray-500 mb-6 italic text-sm">Raqamingizga tasdiqlash kodi yuboriladi</p>
-                    <div class="input-group">📞<input id="user_tel" type="tel" value="+998"></div>
-                    <div id="otp-box" class="input-group hidden">🔑<input id="user_code" type="number" placeholder="0000"></div>
-                    <button id="auth-btn" onclick="sendSMS()" class="yandex-btn mt-4">KOD OLISH</button>`;
+                container.innerHTML = `<h2 class="text-2xl font-bold mb-2 text-slate-800">${role==='driver'?'Haydovchi':'Yo\'lovchi'}</h2>
+                    <p class="text-gray-400 mb-8 text-sm">SMS kod orqali tizimga kiring</p>
+                    <div class="input-group">📞<input id="user_tel" type="tel" value="+998" class="ml-2 bg-transparent outline-none w-full"></div>
+                    <div id="otp-box" class="input-group hidden">🔑<input id="user_code" type="number" placeholder="Kod" class="ml-2 bg-transparent outline-none w-full"></div>
+                    <button id="auth-btn" onclick="sendSMS()" class="yandex-btn mt-4 shadow-xl">DAVOM ETISH</button>`;
             }
         }
 
@@ -75,7 +75,7 @@
             userTel = document.getElementById('user_tel').value;
             const res = await fetch('/auth/send-code', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tel:userTel}) });
             const data = await res.json();
-            sentOTP = data.debug_code; alert("KOD: " + sentOTP);
+            sentOTP = data.debug_code; alert("SMS KOD: " + sentOTP);
             document.getElementById('otp-box').classList.remove('hidden');
             const btn = document.getElementById('auth-btn'); btn.innerText = "KIRISH"; btn.onclick = verifyOTP;
         }
@@ -97,7 +97,7 @@
             document.getElementById('login-page').classList.remove('active');
             document.getElementById('main-dashboard').classList.add('active');
             if(!map) {
-                map = L.map('map', {zoomControl:false}).setView([41.2995, 69.2401], 12);
+                map = L.map('map', {zoomControl:false}).setView([41.2995, 69.2401], 10);
                 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
             }
             loadInterface();
@@ -108,7 +108,7 @@
             const content = document.getElementById('app-content');
             if(currentRole === 'passenger') {
                 content.innerHTML = `<div class="input-group">🏁
-                    <select id="dest" class="w-full bg-transparent outline-none font-semibold">
+                    <select id="dest">
                         <option disabled selected>Qayerga boramiz?</option>
                         <optgroup label="Toshkentdan">
                             <option>Toshkent ➔ Andijon</option><option>Toshkent ➔ Buxoro</option>
@@ -118,7 +118,7 @@
                             <option>Toshkent ➔ Sirdaryo</option><option>Toshkent ➔ Surxondaryo</option>
                             <option>Toshkent ➔ Xorazm</option><option>Toshkent ➔ Qoraqalpog'iston</option>
                         </optgroup>
-                        <optgroup label="Viloyatdan Toshkentga">
+                        <optgroup label="Toshkentga">
                             <option>Andijon ➔ Toshkent</option><option>Buxoro ➔ Toshkent</option>
                             <option>Farg'ona ➔ Toshkent</option><option>Jizzax ➔ Toshkent</option>
                             <option>Namangan ➔ Toshkent</option><option>Navoiy ➔ Toshkent</option>
@@ -127,17 +127,17 @@
                             <option>Xorazm ➔ Toshkent</option><option>Qoraqalpog'iston ➔ Toshkent</option>
                         </optgroup>
                     </select></div>
-                    <button onclick="orderTaxi()" class="yandex-btn mt-2 shadow-lg">TAXI CHAQIRISH</button>`;
+                    <button onclick="orderTaxi()" class="yandex-btn mt-2">TAXI CHAQIRISH</button>`;
             } else if(currentRole === 'driver') {
-                content.innerHTML = `<h3 class="font-bold mb-3 text-gray-400 text-xs">YANGI BUYURTMALAR</h3><div id="list" class="space-y-3 max-h-64 overflow-y-auto"></div>`;
+                content.innerHTML = `<h3 class="font-bold mb-4 text-xs text-gray-400 uppercase">Yangi buyurtmalar</h3><div id="list" class="space-y-3 overflow-y-auto max-h-72"></div>`;
             } else {
-                content.innerHTML = `<h3 class="font-bold mb-3 text-red-500 text-xs uppercase">Barcha buyurtmalar</h3><div id="list" class="space-y-2 max-h-64 overflow-y-auto"></div>`;
+                content.innerHTML = `<h3 class="font-bold mb-4 text-xs text-red-500 uppercase font-black">Admin Panel</h3><div id="list" class="space-y-2 overflow-y-auto max-h-72"></div>`;
             }
         }
 
         async function orderTaxi() {
             const dest = document.getElementById('dest').value;
-            if(dest === "Qayerga boramiz?") return alert("Yo'nalishni tanlang!");
+            if(dest.includes("?")) return alert("Yo'nalishni tanlang!");
             navigator.geolocation.getCurrentPosition(async (pos) => {
                 await fetch('/buyurtma/berish', {
                     method:'POST', headers:{'Content-Type':'application/json'},
@@ -154,30 +154,37 @@
             if(!list) return;
             list.innerHTML = '';
             
+            // Xaritadagi eski markerlarni tozalash
+            Object.values(markers).forEach(m => map.removeLayer(m));
+            markers = {};
+
             data.forEach(item => {
+                // Kutilayotganlarni xaritaga qo'yish
+                if(item.holati === 'Kutilmoqda') {
+                    markers[item._id] = L.marker([item.mijozLoc.lat, item.mijozLoc.lon]).addTo(map).bindPopup(item.mijoz);
+                }
+
                 if(currentRole === 'driver' && item.holati === 'Kutilmoqda') {
-                    list.innerHTML += `<div class="bg-gray-100 p-4 rounded-2xl flex justify-between items-center">
-                        <div><b class="block text-sm">${item.yonalish}</b><span class="text-xs text-gray-400">${item.mijoz}</span></div>
-                        <button onclick="qabul('${item._id}')" class="bg-black text-white px-4 py-2 rounded-xl text-xs font-bold">OLISH</button>
+                    list.innerHTML += `<div class="bg-gray-50 p-4 rounded-2xl flex justify-between items-center border">
+                        <div><b class="text-sm block">${item.yonalish}</b><span class="text-xs text-gray-400">${item.mijoz}</span></div>
+                        <button onclick="qabul('${item._id}')" class="bg-black text-white px-5 py-2 rounded-xl text-xs font-bold">OLISH</button>
                     </div>`;
                 } else if(currentRole === 'admin') {
-                    list.innerHTML += `<div class="bg-white p-3 border-b flex justify-between items-center text-xs">
+                    list.innerHTML += `<div class="p-3 border-b flex justify-between items-center text-xs">
                         <div><b>${item.mijoz}</b><br>${item.yonalish}</div>
-                        <div class="font-bold ${item.holati==='Kutilmoqda'?'text-orange-500':'text-green-600'}">${item.holati}</div>
+                        <span class="font-bold ${item.holati==='Kutilmoqda'?'text-orange-500':'text-green-600'}">${item.holati}</span>
                     </div>`;
                 }
             });
         }
 
         async function qabul(id) {
-            navigator.geolocation.getCurrentPosition(async (pos) => {
-                await fetch('/buyurtma/qabul', {
-                    method:'POST', headers:{'Content-Type':'application/json'},
-                    body:JSON.stringify({ orderId:id, haydovchiIsm:userTel, haydovchiLoc:{lat:pos.coords.latitude, lon:pos.coords.longitude} })
-                });
-                alert("Siz yo'lga chiqdingiz!");
-                yuklash();
+            await fetch('/buyurtma/qabul', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({ orderId:id, haydovchiIsm:userTel })
             });
+            alert("Siz buyurtmani oldingiz!");
+            yuklash();
         }
 
         socket.on('yangilash_chiqdi', yuklash);
