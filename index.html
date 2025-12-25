@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Yandex Taxi CRM</title>
+    <title>Yandex Go Professional</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="/socket.io/socket.io.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        body { font-family: sans-serif; background: #f3f4f6; }
+        body { font-family: sans-serif; background: #f3f4f6; overflow: hidden; }
         .page { display: none; height: 100vh; width: 100%; position: fixed; top: 0; left: 0; background: #fff; }
         .page.active { display: flex; flex-direction: column; }
         #map { flex-grow: 1; width: 100%; z-index: 1; }
@@ -25,17 +25,17 @@
         <h1 class="text-4xl font-black mb-10 italic">Yandex Go</h1>
         <div onclick="showLogin('passenger')" class="bg-zinc-900 p-6 rounded-2xl mb-4 flex items-center gap-4 border-l-4 border-yellow-400">
             <span class="text-3xl">📱</span>
-            <div><b class="text-lg block">Yo'lovchi</b><p class="text-xs text-gray-500">Taxi buyurtma qilish</p></div>
+            <div><b class="text-lg block">Yo'lovchi</b><p class="text-xs text-gray-500">Mashina chaqirish</p></div>
         </div>
         <div onclick="showLogin('driver')" class="bg-zinc-900 p-6 rounded-2xl mb-10 flex items-center gap-4 border-l-4 border-white">
             <span class="text-3xl">🚕</span>
-            <div><b class="text-lg block">Haydovchi</b><p class="text-xs text-gray-500">Buyurtma qabul qilish</p></div>
+            <div><b class="text-lg block">Haydovchi</b><p class="text-xs text-gray-500">Pul ishlash</p></div>
         </div>
-        <button onclick="showLogin('admin')" class="text-gray-500 underline text-sm w-full">Admin panel</button>
+        <button onclick="showLogin('admin')" class="text-gray-500 underline text-sm w-full text-center">Admin panel</button>
     </div>
 
     <div id="login-page" class="page p-6">
-        <button onclick="location.reload()" class="mb-10 text-2xl">✕</button>
+        <button onclick="location.reload()" class="mb-10 text-2xl font-bold">✕</button>
         <div id="auth-container"></div>
     </div>
 
@@ -49,7 +49,7 @@
 
     <script>
         const socket = io();
-        let currentRole = '', userTel = '', sentOTP = '', map, markers = [];
+        let currentRole = '', userTel = '', sentOTP = '', map;
 
         function showLogin(role) {
             currentRole = role;
@@ -58,15 +58,15 @@
             const container = document.getElementById('auth-container');
 
             if(role === 'admin') {
-                container.innerHTML = `<h2 class="text-2xl font-bold mb-6">Admin</h2>
+                container.innerHTML = `<h2 class="text-2xl font-bold mb-6">Admin Login</h2>
                     <div class="input-group">👤<input id="adm_login" type="text" placeholder="Login"></div>
                     <div class="input-group">🔒<input id="adm_pass" type="password" placeholder="Parol"></div>
                     <button onclick="loginAdmin()" class="yandex-btn mt-4">KIRISH</button>`;
             } else {
                 container.innerHTML = `<h2 class="text-2xl font-bold mb-2">${role==='driver'?'Haydovchi':'Yo\'lovchi'}</h2>
-                    <p class="text-gray-500 mb-6 italic">Tasdiqlash kodi yuboriladi</p>
+                    <p class="text-gray-500 mb-6 italic text-sm">Raqamingizga tasdiqlash kodi yuboriladi</p>
                     <div class="input-group">📞<input id="user_tel" type="tel" value="+998"></div>
-                    <div id="otp-box" class="input-group hidden">🔑<input id="user_code" type="number" placeholder="Kod"></div>
+                    <div id="otp-box" class="input-group hidden">🔑<input id="user_code" type="number" placeholder="0000"></div>
                     <button id="auth-btn" onclick="sendSMS()" class="yandex-btn mt-4">KOD OLISH</button>`;
             }
         }
@@ -77,7 +77,7 @@
             const data = await res.json();
             sentOTP = data.debug_code; alert("KOD: " + sentOTP);
             document.getElementById('otp-box').classList.remove('hidden');
-            const btn = document.getElementById('auth-btn'); btn.innerText = "TASDIQLASH"; btn.onclick = verifyOTP;
+            const btn = document.getElementById('auth-btn'); btn.innerText = "KIRISH"; btn.onclick = verifyOTP;
         }
 
         function verifyOTP() {
@@ -107,22 +107,43 @@
         function loadInterface() {
             const content = document.getElementById('app-content');
             if(currentRole === 'passenger') {
-                content.innerHTML = `<div class="input-group">🏁<select id="dest"><option>Toshkent ➔ Samarqand</option><option>Samarqand ➔ Toshkent</option></select></div>
-                    <button onclick="orderTaxi()" class="yandex-btn mt-2">TAXI CHAQIRISH</button>`;
+                content.innerHTML = `<div class="input-group">🏁
+                    <select id="dest" class="w-full bg-transparent outline-none font-semibold">
+                        <option disabled selected>Qayerga boramiz?</option>
+                        <optgroup label="Toshkentdan">
+                            <option>Toshkent ➔ Andijon</option><option>Toshkent ➔ Buxoro</option>
+                            <option>Toshkent ➔ Farg'ona</option><option>Toshkent ➔ Jizzax</option>
+                            <option>Toshkent ➔ Namangan</option><option>Toshkent ➔ Navoiy</option>
+                            <option>Toshkent ➔ Qashqadaryo</option><option>Toshkent ➔ Samarqand</option>
+                            <option>Toshkent ➔ Sirdaryo</option><option>Toshkent ➔ Surxondaryo</option>
+                            <option>Toshkent ➔ Xorazm</option><option>Toshkent ➔ Qoraqalpog'iston</option>
+                        </optgroup>
+                        <optgroup label="Viloyatdan Toshkentga">
+                            <option>Andijon ➔ Toshkent</option><option>Buxoro ➔ Toshkent</option>
+                            <option>Farg'ona ➔ Toshkent</option><option>Jizzax ➔ Toshkent</option>
+                            <option>Namangan ➔ Toshkent</option><option>Navoiy ➔ Toshkent</option>
+                            <option>Qashqadaryo ➔ Toshkent</option><option>Samarqand ➔ Toshkent</option>
+                            <option>Sirdaryo ➔ Toshkent</option><option>Surxondaryo ➔ Toshkent</option>
+                            <option>Xorazm ➔ Toshkent</option><option>Qoraqalpog'iston ➔ Toshkent</option>
+                        </optgroup>
+                    </select></div>
+                    <button onclick="orderTaxi()" class="yandex-btn mt-2 shadow-lg">TAXI CHAQIRISH</button>`;
             } else if(currentRole === 'driver') {
-                content.innerHTML = `<h3 class="font-bold mb-3 text-gray-500">YANGI BUYURTMALAR</h3><div id="list" class="space-y-3"></div>`;
+                content.innerHTML = `<h3 class="font-bold mb-3 text-gray-400 text-xs">YANGI BUYURTMALAR</h3><div id="list" class="space-y-3 max-h-64 overflow-y-auto"></div>`;
             } else {
-                content.innerHTML = `<h3 class="font-bold mb-3 text-red-500 uppercase">Admin: Barcha buyurtmalar</h3><div id="list" class="space-y-2 overflow-y-auto max-h-64"></div>`;
+                content.innerHTML = `<h3 class="font-bold mb-3 text-red-500 text-xs uppercase">Barcha buyurtmalar</h3><div id="list" class="space-y-2 max-h-64 overflow-y-auto"></div>`;
             }
         }
 
         async function orderTaxi() {
+            const dest = document.getElementById('dest').value;
+            if(dest === "Qayerga boramiz?") return alert("Yo'nalishni tanlang!");
             navigator.geolocation.getCurrentPosition(async (pos) => {
                 await fetch('/buyurtma/berish', {
                     method:'POST', headers:{'Content-Type':'application/json'},
-                    body:JSON.stringify({ ism: userTel, tel: userTel, yonalish: document.getElementById('dest').value, mijozLoc: {lat: pos.coords.latitude, lon: pos.coords.longitude} })
+                    body:JSON.stringify({ ism: userTel, tel: userTel, yonalish: dest, mijozLoc: {lat: pos.coords.latitude, lon: pos.coords.longitude} })
                 });
-                alert("Buyurtma berildi!");
+                alert("Buyurtmangiz yuborildi!");
             });
         }
 
@@ -135,7 +156,7 @@
             
             data.forEach(item => {
                 if(currentRole === 'driver' && item.holati === 'Kutilmoqda') {
-                    list.innerHTML += `<div class="bg-gray-100 p-4 rounded-2xl flex justify-between items-center shadow-sm animate-fade-in">
+                    list.innerHTML += `<div class="bg-gray-100 p-4 rounded-2xl flex justify-between items-center">
                         <div><b class="block text-sm">${item.yonalish}</b><span class="text-xs text-gray-400">${item.mijoz}</span></div>
                         <button onclick="qabul('${item._id}')" class="bg-black text-white px-4 py-2 rounded-xl text-xs font-bold">OLISH</button>
                     </div>`;
@@ -154,7 +175,8 @@
                     method:'POST', headers:{'Content-Type':'application/json'},
                     body:JSON.stringify({ orderId:id, haydovchiIsm:userTel, haydovchiLoc:{lat:pos.coords.latitude, lon:pos.coords.longitude} })
                 });
-                alert("Siz buyurtmani oldingiz!");
+                alert("Siz yo'lga chiqdingiz!");
+                yuklash();
             });
         }
 
@@ -162,4 +184,3 @@
     </script>
 </body>
 </html>
-
