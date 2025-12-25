@@ -1,7 +1,7 @@
 {
-  "name": "yandex-taxi-pro",
-  "version": "1.0.0",
-  "description": "Telegram Bot va Web Dashboard integratsiyasi",
+  "name": "yandex-taxi-pro-max",
+  "version": "1.1.0",
+  "description": "Professional Taxi System with Stickers and Notifications",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
