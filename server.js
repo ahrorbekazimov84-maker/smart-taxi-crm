@@ -1,118 +1,86 @@
 const express = require('express');
 const { Telegraf, Markup } = require('telegraf');
-const cors = require('cors');
-const fs = require('fs');
 const http = require('http');
 const { Server } = require('socket.io');
+const fs = require('fs');
 const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+const io = new Server(server);
 
-const DATA_FILE = './baza.json';
 const BOT_TOKEN = '8458860332:AAHtNrG7i5q-a-qbR3IBGg16MiWRfXjFbJE';
 const bot = new Telegraf(BOT_TOKEN);
-const ADMIN_AUTH = { login: "admin", pass: "admin123" };
+const DATA_FILE = './baza.json';
 
-const oqish = () => {
-    try {
-        if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, JSON.stringify({ buyurtmalar: [], foydalanuvchilar: [] }));
-        return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-    } catch (e) { return { buyurtmalar: [], foydalanuvchilar: [] }; }
+// Ma'lumotlarni boshqarish
+const initData = () => {
+    if (!fs.existsSync(DATA_FILE)) {
+        fs.writeFileSync(DATA_FILE, JSON.stringify({ orders: [], users: [] }));
+    }
 };
-const saqlash = (data) => fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+initData();
 
-// --- TELEGRAM BOT (RO'YXATDAN O'TISH VA BUYURTMA) ---
+const getData = () => JSON.parse(fs.readFileSync(DATA_FILE));
+const saveData = (data) => fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+
+app.use(express.json());
+app.use(express.static(__dirname));
+
+// --- TELEGRAM BOT ---
 bot.start((ctx) => {
-    ctx.reply('🚕 Milliy Taxi tizimiga xush kelibsiz!\nBuyurtma berish uchun telefon raqamingizni yuboring:', 
-    Markup.keyboard([[Markup.button.contactRequest('📱 Telefon raqamni yuborish')]]).resize());
+    ctx.reply('🚕 Milliy Taxi!\nRo‘yxatdan o‘tish uchun kontaktingizni yuboring.', 
+    Markup.keyboard([[Markup.button.contactRequest('📱 Kontaktni yuborish')]]).resize());
 });
 
 bot.on('contact', (ctx) => {
-    const tel = ctx.message.contact.phone_number;
-    const ism = ctx.message.contact.first_name;
-    let data = oqish();
-    
-    // Foydalanuvchini saqlash
-    const user = { chatId: ctx.from.id, ism, tel, roli: 'yolovchi' };
-    if (!data.foydalanuvchilar.find(u => u.chatId === ctx.from.id)) {
-        data.foydalanuvchilar.push(user);
-        saqlash(data);
-    }
-
-    ctx.reply(`Rahmat ${ism}! Endi buyurtma berishingiz mumkin.`, 
-    Markup.keyboard([['📍 Taxi chaqirish'], ['🚕 Haydovchi bo\'lish']]).resize());
+    const data = getData();
+    const user = { id: ctx.from.id, name: ctx.from.first_name, tel: ctx.message.contact.phone_number };
+    if (!data.users.find(u => u.id === user.id)) data.users.push(user);
+    saveData(data);
+    ctx.reply(`Rahmat, ${user.name}! Endi buyurtma berishingiz mumkin.`, 
+    Markup.keyboard([['📍 Taxi chaqirish']]).resize());
 });
 
 bot.hears('📍 Taxi chaqirish', (ctx) => {
     ctx.reply('Hozirgi joylashuvingizni yuboring:', Markup.keyboard([[Markup.button.locationRequest('📍 Joylashuvni yuborish')]]).resize());
 });
 
-bot.on('location', async (ctx) => {
-    const data = oqish();
-    const user = data.foydalanuvchilar.find(u => u.chatId === ctx.from.id);
-    if(!user) return ctx.reply('Avval ro\'yxatdan o\'ting (Kontaktni yuboring)');
-
-    const orderId = Date.now().toString();
-    const yangi = {
-        _id: orderId,
-        mijoz: user.ism,
-        tel: user.tel,
-        yonalish: "Telegram (Xarita)",
-        mijozLoc: { lat: ctx.message.location.latitude, lon: ctx.message.location.longitude },
-        holati: 'Kutilmoqda',
-        vaqt: new Date().toLocaleTimeString('uz-UZ')
+bot.on('location', (ctx) => {
+    const data = getData();
+    const user = data.users.find(u => u.id === ctx.from.id);
+    const order = {
+        id: Date.now(),
+        name: user ? user.name : ctx.from.first_name,
+        tel: user ? user.tel : 'Noma’lum',
+        from: 'Telegram',
+        status: 'Kutilmoqda',
+        time: new Date().toLocaleTimeString('uz-UZ')
     };
-    data.buyurtmalar.push(yangi);
-    saqlash(data);
-    io.emit('yangilash_chiqdi');
-    ctx.reply('Buyurtmangiz qabul qilindi! Haydovchi topilganda xabar beramiz. 📥');
+    data.orders.push(order);
+    saveData(data);
+    io.emit('new_order');
+    ctx.reply('Buyurtmangiz qabul qilindi! ✅');
 });
 
-bot.launch();
+bot.launch().catch(err => console.error('Bot launch error:', err));
 
-// --- WEB API ---
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, '.')));
-
-// SMS Simulyatsiya (Kod yuborish)
-app.post('/api/send-code', (req, res) => {
-    const { tel } = req.body;
-    // Haqiqiy tizimda bu yerda SMS ketadi. Hozircha kod: 1234
-    res.json({ message: "Kod yuborildi: 1234" });
+// --- API ---
+app.post('/api/auth', (req, res) => {
+    const { tel, role } = req.body;
+    // SMS Simulyatsiya
+    res.json({ ok: true, code: "1234" });
 });
 
-app.post('/api/verify-code', (req, res) => {
-    const { tel, code, ism, role } = req.body;
-    if (code === "1234") {
-        let data = oqish();
-        if(!data.foydalanuvchilar.find(u => u.tel === tel)) {
-            data.foydalanuvchilar.push({ tel, ism, roli: role });
-            saqlash(data);
-        }
-        res.json({ status: "ok" });
-    } else {
-        res.status(400).json({ status: "error" });
-    }
-});
+app.get('/api/orders', (req, res) => res.json(getData().orders));
 
-app.post('/admin/login', (req, res) => {
-    const { login, pass } = req.body;
-    if(login === ADMIN_AUTH.login && pass === ADMIN_AUTH.pass) res.json({status: "ok"});
-    else res.status(401).json({status: "error"});
-});
-
-app.get('/admin/buyurtmalar', (req, res) => res.json(oqish().buyurtmalar));
-
-app.post('/buyurtma/berish', (req, res) => {
-    const data = oqish();
-    const yangi = { ...req.body, _id: Date.now().toString(), holati: 'Kutilmoqda', vaqt: new Date().toLocaleTimeString('uz-UZ') };
-    data.buyurtmalar.push(yangi);
-    saqlash(data);
-    io.emit('yangilash_chiqdi');
-    res.json(yangi);
+app.post('/api/order-web', (req, res) => {
+    const data = getData();
+    const order = { ...req.body, id: Date.now(), status: 'Kutilmoqda', time: new Date().toLocaleTimeString('uz-UZ') };
+    data.orders.push(order);
+    saveData(data);
+    io.emit('new_order');
+    res.json({ ok: true });
 });
 
 const PORT = process.env.PORT || 3000;
