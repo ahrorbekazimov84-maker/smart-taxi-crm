@@ -3,85 +3,83 @@ const { Telegraf, Markup } = require('telegraf');
 const http = require('http');
 const { Server } = require('socket.io');
 const fs = require('fs');
-const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
-
 const BOT_TOKEN = '8458860332:AAHtNrG7i5q-a-qbR3IBGg16MiWRfXjFbJE';
 const bot = new Telegraf(BOT_TOKEN);
 const DATA_FILE = './baza.json';
 
-// Ma'lumotlarni boshqarish
-const initData = () => {
-    if (!fs.existsSync(DATA_FILE)) {
-        fs.writeFileSync(DATA_FILE, JSON.stringify({ orders: [], users: [] }));
-    }
-};
-initData();
+// Ma'lumotlar bazasini tekshirish
+if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, JSON.stringify({ orders: [], users: [] }));
 
-const getData = () => JSON.parse(fs.readFileSync(DATA_FILE));
-const saveData = (data) => fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+const db = () => JSON.parse(fs.readFileSync(DATA_FILE));
+const save = (data) => fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// --- TELEGRAM BOT ---
+// --- BOT LOGIKASI (Faqat shaxsiy buyurtmalar) ---
 bot.start((ctx) => {
-    ctx.reply('🚕 Milliy Taxi!\nRo‘yxatdan o‘tish uchun kontaktingizni yuboring.', 
+    ctx.reply('🚖 Milliy Taxi - O‘zbekiston!\nRo‘yxatdan o‘tish uchun kontaktingizni yuboring:', 
     Markup.keyboard([[Markup.button.contactRequest('📱 Kontaktni yuborish')]]).resize());
 });
 
 bot.on('contact', (ctx) => {
-    const data = getData();
+    let data = db();
     const user = { id: ctx.from.id, name: ctx.from.first_name, tel: ctx.message.contact.phone_number };
     if (!data.users.find(u => u.id === user.id)) data.users.push(user);
-    saveData(data);
-    ctx.reply(`Rahmat, ${user.name}! Endi buyurtma berishingiz mumkin.`, 
-    Markup.keyboard([['📍 Taxi chaqirish']]).resize());
+    save(data);
+    ctx.reply('✅ Ro‘yxatdan o‘tdingiz!', Markup.keyboard([['📍 Taxi chaqirish'], ['📜 Mening buyurtmalarim']]).resize());
 });
 
-bot.hears('📍 Taxi chaqirish', (ctx) => {
-    ctx.reply('Hozirgi joylashuvingizni yuboring:', Markup.keyboard([[Markup.button.locationRequest('📍 Joylashuvni yuborish')]]).resize());
+bot.hears('📜 Mening buyurtmalarim', (ctx) => {
+    const myOrders = db().orders.filter(o => o.userId === ctx.from.id);
+    if(myOrders.length === 0) return ctx.reply('Sizda hali buyurtmalar yo‘q.');
+    let msg = 'Sizning buyurtmalaringiz:\n\n';
+    myOrders.forEach(o => msg += `📅 ${o.time}\n📍 ${o.route}\nHolat: ${o.status}\n---\n`);
+    ctx.reply(msg);
 });
 
 bot.on('location', (ctx) => {
-    const data = getData();
+    let data = db();
     const user = data.users.find(u => u.id === ctx.from.id);
     const order = {
         id: Date.now(),
+        userId: ctx.from.id,
         name: user ? user.name : ctx.from.first_name,
         tel: user ? user.tel : 'Noma’lum',
-        from: 'Telegram',
+        loc: { lat: ctx.message.location.latitude, lon: ctx.message.location.longitude },
+        route: "Telegram Xarita",
         status: 'Kutilmoqda',
-        time: new Date().toLocaleTimeString('uz-UZ')
+        time: new Date().toLocaleString('uz-UZ')
     };
     data.orders.push(order);
-    saveData(data);
-    io.emit('new_order');
-    ctx.reply('Buyurtmangiz qabul qilindi! ✅');
+    save(data);
+    io.emit('update');
+    ctx.reply('🚀 Buyurtma qabul qilindi!');
 });
 
-bot.launch().catch(err => console.error('Bot launch error:', err));
+bot.launch();
 
-// --- API ---
-app.post('/api/auth', (req, res) => {
-    const { tel, role } = req.body;
-    // SMS Simulyatsiya
-    res.json({ ok: true, code: "1234" });
-});
-
-app.get('/api/orders', (req, res) => res.json(getData().orders));
+// --- WEB API ---
+app.get('/api/orders', (req, res) => res.json(db().orders));
 
 app.post('/api/order-web', (req, res) => {
-    const data = getData();
-    const order = { ...req.body, id: Date.now(), status: 'Kutilmoqda', time: new Date().toLocaleTimeString('uz-UZ') };
-    data.orders.push(order);
-    saveData(data);
-    io.emit('new_order');
+    let data = db();
+    data.orders.push({...req.body, status: 'Kutilmoqda', time: new Date().toLocaleTimeString('uz-UZ')});
+    save(data);
+    io.emit('update');
+    res.json({ok: true});
+});
+
+app.post('/api/delete-order', (req, res) => {
+    let data = db();
+    data.orders = data.orders.filter(o => o.id !== req.body.id);
+    save(data);
+    io.emit('update');
     res.json({ ok: true });
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => console.log(`Server: ${PORT}`));
+server.listen(process.env.PORT || 3000, '0.0.0.0', () => console.log('Server Ready'));
