@@ -15,47 +15,41 @@ const ADMIN_CONF = { login: "admin", pass: "taxi777" };
 const BOT_TOKEN = '8458860332:AAHtNrG7i5q-a-qbR3IBGg16MiWRfXjFbJE';
 const bot = new Telegraf(BOT_TOKEN);
 
-// Stikerlar IDlari (Bular standart taxi stikerlari o'rnida ishlaydi)
-const STICKERS = {
-    welcome: 'CAACAgIAAxkBAAEL6Zxl7...', // Salomlashish
-    order_received: 'CAACAgIAAxkBAAEL6Z5l7...', // Qabul qilindi
-    driver_on_way: 'CAACAgIAAxkBAAEL6aBl7...', // Haydovchi yo'lda
-    finished: 'CAACAgIAAxkBAAEL6aJl7...' // Yakunlandi
-};
-
+// Ma'lumotlarni xatosiz o'qish va saqlash
 const oqish = () => {
     try {
         if (!fs.existsSync(DATA_FILE)) return { buyurtmalar: [], haydovchilar: [] };
         const content = fs.readFileSync(DATA_FILE, 'utf8');
-        return content ? JSON.parse(content) : { buyurtmalar: [], haydovchilar: [] };
-    } catch (e) { return { buyurtmalar: [], haydovchilar: [] }; }
+        const parsed = JSON.parse(content);
+        if (!parsed.buyurtmalar) parsed.buyurtmalar = [];
+        if (!parsed.haydovchilar) parsed.haydovchilar = [];
+        return parsed;
+    } catch (e) { 
+        return { buyurtmalar: [], haydovchilar: [] }; 
+    }
 };
 
 const saqlash = (data) => fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 
 // --- TELEGRAM BOT LOGIKASI ---
-
 bot.start((ctx) => {
-    ctx.replyWithSticker('CAACAgIAAxkBAAEL6Zxl7Z...'); // Taxi stikeri
-    ctx.reply(`Assalomu alaykum ${ctx.from.first_name}! 🚕\nSiz "Viloyat Taxi" professional tizimidasiz.\n\nRejimni tanlang:`, 
+    ctx.replyWithSticker('CAACAgIAAxkBAAEL6Zxl7Z...'); // Taxi stikeri (Agar ID xato bo'lsa, xabar yuboradi)
+    ctx.reply(`Assalomu alaykum ${ctx.from.first_name}! 🚕\n\nViloyat Taxi tizimiga xush kelibsiz. Rejimni tanlang:`, 
     Markup.keyboard([
         ['🙋‍♂️ Yo\'lovchi bo\'lish', '🚕 Haydovchi bo\'lish'],
         ['📋 Safarlar tarixi', '⭐ Reytingim']
     ]).resize());
 });
 
-// Haydovchi sifatida ro'yxatdan o'tish
 bot.hears('🚕 Haydovchi bo\'lish', (ctx) => {
     let data = oqish();
-    if(!data.haydovchilar) data.haydovchilar = [];
     if(!data.haydovchilar.includes(ctx.from.id)) {
         data.haydovchilar.push(ctx.from.id);
         saqlash(data);
     }
-    ctx.reply('Tabriklaymiz! Siz haydovchilar ro\'yxatiga qo\'shildingiz. ✅\nYangi buyurtmalar haqida shu yerda xabar olasiz.');
+    ctx.reply('Siz haydovchilar ro\'yxatiga qo\'shildingiz! ✅\nYangi buyurtmalar haqida shu yerda bildirishnoma olasiz.');
 });
 
-// Yo'lovchi joylashuv yuborganda
 bot.on('location', async (ctx) => {
     const data = oqish();
     const orderId = Date.now().toString();
@@ -64,7 +58,7 @@ bot.on('location', async (ctx) => {
         mijoz: ctx.from.first_name,
         chatId: ctx.from.id,
         tel: "TG: " + ctx.from.id,
-        yonalish: "Telegram orqali (Xaritada ko'rsatilgan)",
+        yonalish: "Telegram Bot (Xaritada)",
         mijozLoc: { lat: ctx.message.location.latitude, lon: ctx.message.location.longitude },
         holati: 'Kutilmoqda',
         vaqt: new Date().toLocaleTimeString('uz-UZ')
@@ -74,20 +68,17 @@ bot.on('location', async (ctx) => {
     saqlash(data);
     io.emit('yangilash_chiqdi');
 
-    await ctx.reply('Buyurtmangiz qabul qilindi! 📥\nHaydovchilarimizga xabar yuborildi. Kuting...');
+    await ctx.reply('Buyurtmangiz qabul qilindi! 📥\nHaydovchilarimizga xabar yuborildi.');
 
-    // Barcha haydovchilarga xabar yuborish
-    if(data.haydovchilar) {
-        data.haydovchilar.forEach(hId => {
-            bot.telegram.sendMessage(hId, `📢 YANGI BUYURTMA!\n👤 Mijoz: ${ctx.from.first_name}\n📍 Joylashuv: Xaritada ko'rsatilgan`, 
-            Markup.inlineKeyboard([
-                [Markup.button.callback('🚕 QABUL QILISH', `accept_${orderId}`)]
-            ]));
-        });
-    }
+    // Haydovchilarga bildirishnoma yuborish
+    data.haydovchilar.forEach(hId => {
+        bot.telegram.sendMessage(hId, `📢 YANGI BUYURTMA!\n👤 Mijoz: ${ctx.from.first_name}\n📍 Joylashuv: Xaritada`, 
+        Markup.inlineKeyboard([
+            [Markup.button.callback('🚕 QABUL QILISH', `accept_${orderId}`)]
+        ]));
+    });
 });
 
-// Haydovchi buyurtmani bot ichida qabul qilganda
 bot.action(/accept_(.+)/, (ctx) => {
     const orderId = ctx.match[1];
     let data = oqish();
@@ -98,11 +89,8 @@ bot.action(/accept_(.+)/, (ctx) => {
         order.haydovchi = ctx.from.first_name;
         saqlash(data);
         io.emit('yangilash_chiqdi');
-
-        ctx.editMessageText(`Muvaffaqiyatli qabul qilindi! ✅\nMijozga xabar yuborildi.`);
-        
-        // Mijozga stiker va xabar yuborish
-        bot.telegram.sendMessage(order.chatId, `Sizning buyurtmangizni ${ctx.from.first_name} ismli haydovchi qabul qildi! 🚖\nIltimos, kutib turing.`);
+        ctx.editMessageText(`Muvaffaqiyatli qabul qilindi! ✅`);
+        bot.telegram.sendMessage(order.chatId, `Xushxabar! 🚖\nSizning buyurtmangizni ${ctx.from.first_name} qabul qildi.`);
     } else {
         ctx.answerCbQuery('Bu buyurtma allaqachon olingan! ❌');
     }
@@ -123,5 +111,8 @@ app.post('/admin/login', (req, res) => {
     else res.status(401).json({ status: "error" });
 });
 
+// Render uchun muhim qism
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Professional Taxi Server running on ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server is running on port ${PORT}`);
+});
