@@ -1,193 +1,127 @@
-<!DOCTYPE html>
-<html lang="uz">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Yandex Taxi CRM</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="/socket.io/socket.io.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <style>
-        body { font-family: sans-serif; background: #f3f4f6; overflow: hidden; }
-        .page { display: none; height: 100vh; width: 100%; position: fixed; top: 0; left: 0; background: #fff; }
-        .page.active { display: flex; flex-direction: column; }
-        #map { flex-grow: 1; width: 100%; z-index: 1; }
-        .bottom-sheet { background: white; border-radius: 24px 24px 0 0; padding: 20px; box-shadow: 0 -10px 25px rgba(0,0,0,0.1); z-index: 100; }
-        .yandex-btn { background: #ffcc00; color: #000; font-weight: 800; padding: 18px; border-radius: 18px; width: 100%; }
-        .input-group { background: #f0f0f0; border-radius: 12px; padding: 14px; margin-bottom: 10px; display: flex; align-items: center; }
-        .input-group select { background: transparent; width: 100%; outline: none; border: none; font-size: 16px; font-weight: 600; }
-    </style>
-</head>
-<body>
+const express = require('express');
+const { Telegraf, Markup } = require('telegraf');
+const cors = require('cors');
+const fs = require('fs');
+const http = require('http');
+const { Server } = require('socket.io');
+const path = require('path');
 
-    <div id="home-page" class="page active bg-black text-white justify-center p-8">
-        <h1 class="text-4xl font-black mb-12 italic">Yandex Go</h1>
-        <div onclick="showLogin('passenger')" class="bg-zinc-900 p-6 rounded-3xl mb-4 flex items-center gap-4 border-l-4 border-yellow-400 active:scale-95 transition">
-            <span class="text-3xl">📱</span>
-            <div><b class="text-lg block">Yo'lovchi</b><p class="text-xs text-gray-500">Mashina chaqirish</p></div>
-        </div>
-        <div onclick="showLogin('driver')" class="bg-zinc-900 p-6 rounded-3xl mb-12 flex items-center gap-4 border-l-4 border-white active:scale-95 transition">
-            <span class="text-3xl">🚕</span>
-            <div><b class="text-lg block">Haydovchi</b><p class="text-xs text-gray-500">Buyurtma qidirish</p></div>
-        </div>
-        <button onclick="showLogin('admin')" class="text-gray-500 underline text-sm w-full">Admin panel</button>
-    </div>
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: "*" } });
 
-    <div id="login-page" class="page p-6">
-        <button onclick="location.reload()" class="mb-10 text-2xl font-bold">✕</button>
-        <div id="auth-container"></div>
-    </div>
+const DATA_FILE = './baza.json';
+const ADMIN_CONF = { login: "admin", pass: "taxi777" };
+const BOT_TOKEN = '8458860332:AAHtNrG7i5q-a-qbR3IBGg16MiWRfXjFbJE';
+const bot = new Telegraf(BOT_TOKEN);
 
-    <div id="main-dashboard" class="page">
-        <div id="map"></div>
-        <div class="bottom-sheet">
-            <div class="w-10 h-1.5 bg-gray-300 rounded-full mx-auto mb-6"></div>
-            <div id="app-content"></div>
-        </div>
-    </div>
+// Stikerlar IDlari (Bular standart taxi stikerlari o'rnida ishlaydi)
+const STICKERS = {
+    welcome: 'CAACAgIAAxkBAAEL6Zxl7...', // Salomlashish
+    order_received: 'CAACAgIAAxkBAAEL6Z5l7...', // Qabul qilindi
+    driver_on_way: 'CAACAgIAAxkBAAEL6aBl7...', // Haydovchi yo'lda
+    finished: 'CAACAgIAAxkBAAEL6aJl7...' // Yakunlandi
+};
 
-    <script>
-        const socket = io();
-        let currentRole = '', userTel = '', sentOTP = '', map, markers = {};
+const oqish = () => {
+    try {
+        if (!fs.existsSync(DATA_FILE)) return { buyurtmalar: [], haydovchilar: [] };
+        const content = fs.readFileSync(DATA_FILE, 'utf8');
+        return content ? JSON.parse(content) : { buyurtmalar: [], haydovchilar: [] };
+    } catch (e) { return { buyurtmalar: [], haydovchilar: [] }; }
+};
 
-        function showLogin(role) {
-            currentRole = role;
-            document.getElementById('home-page').classList.remove('active');
-            document.getElementById('login-page').classList.add('active');
-            const container = document.getElementById('auth-container');
+const saqlash = (data) => fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 
-            if(role === 'admin') {
-                container.innerHTML = `<h2 class="text-2xl font-bold mb-6">Boshqaruv</h2>
-                    <div class="input-group">👤<input id="adm_login" type="text" placeholder="Login" class="ml-2 bg-transparent outline-none"></div>
-                    <div class="input-group">🔒<input id="adm_pass" type="password" placeholder="Parol" class="ml-2 bg-transparent outline-none"></div>
-                    <button onclick="loginAdmin()" class="yandex-btn mt-4 shadow-xl">KIRISH</button>`;
-            } else {
-                container.innerHTML = `<h2 class="text-2xl font-bold mb-2 text-slate-800">${role==='driver'?'Haydovchi':'Yo\'lovchi'}</h2>
-                    <p class="text-gray-400 mb-8 text-sm">SMS kod orqali tizimga kiring</p>
-                    <div class="input-group">📞<input id="user_tel" type="tel" value="+998" class="ml-2 bg-transparent outline-none w-full"></div>
-                    <div id="otp-box" class="input-group hidden">🔑<input id="user_code" type="number" placeholder="Kod" class="ml-2 bg-transparent outline-none w-full"></div>
-                    <button id="auth-btn" onclick="sendSMS()" class="yandex-btn mt-4 shadow-xl">DAVOM ETISH</button>`;
-            }
-        }
+// --- TELEGRAM BOT LOGIKASI ---
 
-        async function sendSMS() {
-            userTel = document.getElementById('user_tel').value;
-            const res = await fetch('/auth/send-code', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tel:userTel}) });
-            const data = await res.json();
-            sentOTP = data.debug_code; alert("SMS KOD: " + sentOTP);
-            document.getElementById('otp-box').classList.remove('hidden');
-            const btn = document.getElementById('auth-btn'); btn.innerText = "KIRISH"; btn.onclick = verifyOTP;
-        }
+bot.start((ctx) => {
+    ctx.replyWithSticker('CAACAgIAAxkBAAEL6Zxl7Z...'); // Taxi stikeri
+    ctx.reply(`Assalomu alaykum ${ctx.from.first_name}! 🚕\nSiz "Viloyat Taxi" professional tizimidasiz.\n\nRejimni tanlang:`, 
+    Markup.keyboard([
+        ['🙋‍♂️ Yo\'lovchi bo\'lish', '🚕 Haydovchi bo\'lish'],
+        ['📋 Safarlar tarixi', '⭐ Reytingim']
+    ]).resize());
+});
 
-        function verifyOTP() {
-            if(document.getElementById('user_code').value == sentOTP) startDashboard();
-            else alert("Xato kod!");
-        }
+// Haydovchi sifatida ro'yxatdan o'tish
+bot.hears('🚕 Haydovchi bo\'lish', (ctx) => {
+    let data = oqish();
+    if(!data.haydovchilar) data.haydovchilar = [];
+    if(!data.haydovchilar.includes(ctx.from.id)) {
+        data.haydovchilar.push(ctx.from.id);
+        saqlash(data);
+    }
+    ctx.reply('Tabriklaymiz! Siz haydovchilar ro\'yxatiga qo\'shildingiz. ✅\nYangi buyurtmalar haqida shu yerda xabar olasiz.');
+});
 
-        async function loginAdmin() {
-            const res = await fetch('/admin/login', {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({login:document.getElementById('adm_login').value, pass:document.getElementById('adm_pass').value})
-            });
-            if(res.ok) startDashboard(); else alert("Xato!");
-        }
+// Yo'lovchi joylashuv yuborganda
+bot.on('location', async (ctx) => {
+    const data = oqish();
+    const orderId = Date.now().toString();
+    const yangi = {
+        _id: orderId,
+        mijoz: ctx.from.first_name,
+        chatId: ctx.from.id,
+        tel: "TG: " + ctx.from.id,
+        yonalish: "Telegram orqali (Xaritada ko'rsatilgan)",
+        mijozLoc: { lat: ctx.message.location.latitude, lon: ctx.message.location.longitude },
+        holati: 'Kutilmoqda',
+        vaqt: new Date().toLocaleTimeString('uz-UZ')
+    };
+    
+    data.buyurtmalar.push(yangi);
+    saqlash(data);
+    io.emit('yangilash_chiqdi');
 
-        function startDashboard() {
-            document.getElementById('login-page').classList.remove('active');
-            document.getElementById('main-dashboard').classList.add('active');
-            if(!map) {
-                map = L.map('map', {zoomControl:false}).setView([41.2995, 69.2401], 10);
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
-            }
-            loadInterface();
-            yuklash();
-        }
+    await ctx.reply('Buyurtmangiz qabul qilindi! 📥\nHaydovchilarimizga xabar yuborildi. Kuting...');
 
-        function loadInterface() {
-            const content = document.getElementById('app-content');
-            if(currentRole === 'passenger') {
-                content.innerHTML = `<div class="input-group">🏁
-                    <select id="dest">
-                        <option disabled selected>Qayerga boramiz?</option>
-                        <optgroup label="Toshkentdan">
-                            <option>Toshkent ➔ Andijon</option><option>Toshkent ➔ Buxoro</option>
-                            <option>Toshkent ➔ Farg'ona</option><option>Toshkent ➔ Jizzax</option>
-                            <option>Toshkent ➔ Namangan</option><option>Toshkent ➔ Navoiy</option>
-                            <option>Toshkent ➔ Qashqadaryo</option><option>Toshkent ➔ Samarqand</option>
-                            <option>Toshkent ➔ Sirdaryo</option><option>Toshkent ➔ Surxondaryo</option>
-                            <option>Toshkent ➔ Xorazm</option><option>Toshkent ➔ Qoraqalpog'iston</option>
-                        </optgroup>
-                        <optgroup label="Toshkentga">
-                            <option>Andijon ➔ Toshkent</option><option>Buxoro ➔ Toshkent</option>
-                            <option>Farg'ona ➔ Toshkent</option><option>Jizzax ➔ Toshkent</option>
-                            <option>Namangan ➔ Toshkent</option><option>Navoiy ➔ Toshkent</option>
-                            <option>Qashqadaryo ➔ Toshkent</option><option>Samarqand ➔ Toshkent</option>
-                            <option>Sirdaryo ➔ Toshkent</option><option>Surxondaryo ➔ Toshkent</option>
-                            <option>Xorazm ➔ Toshkent</option><option>Qoraqalpog'iston ➔ Toshkent</option>
-                        </optgroup>
-                    </select></div>
-                    <button onclick="orderTaxi()" class="yandex-btn mt-2">TAXI CHAQIRISH</button>`;
-            } else if(currentRole === 'driver') {
-                content.innerHTML = `<h3 class="font-bold mb-4 text-xs text-gray-400 uppercase">Yangi buyurtmalar</h3><div id="list" class="space-y-3 overflow-y-auto max-h-72"></div>`;
-            } else {
-                content.innerHTML = `<h3 class="font-bold mb-4 text-xs text-red-500 uppercase font-black">Admin Panel</h3><div id="list" class="space-y-2 overflow-y-auto max-h-72"></div>`;
-            }
-        }
+    // Barcha haydovchilarga xabar yuborish
+    if(data.haydovchilar) {
+        data.haydovchilar.forEach(hId => {
+            bot.telegram.sendMessage(hId, `📢 YANGI BUYURTMA!\n👤 Mijoz: ${ctx.from.first_name}\n📍 Joylashuv: Xaritada ko'rsatilgan`, 
+            Markup.inlineKeyboard([
+                [Markup.button.callback('🚕 QABUL QILISH', `accept_${orderId}`)]
+            ]));
+        });
+    }
+});
 
-        async function orderTaxi() {
-            const dest = document.getElementById('dest').value;
-            if(dest.includes("?")) return alert("Yo'nalishni tanlang!");
-            navigator.geolocation.getCurrentPosition(async (pos) => {
-                await fetch('/buyurtma/berish', {
-                    method:'POST', headers:{'Content-Type':'application/json'},
-                    body:JSON.stringify({ ism: userTel, tel: userTel, yonalish: dest, mijozLoc: {lat: pos.coords.latitude, lon: pos.coords.longitude} })
-                });
-                alert("Buyurtmangiz yuborildi!");
-            });
-        }
+// Haydovchi buyurtmani bot ichida qabul qilganda
+bot.action(/accept_(.+)/, (ctx) => {
+    const orderId = ctx.match[1];
+    let data = oqish();
+    const order = data.buyurtmalar.find(b => b._id === orderId);
 
-        async function yuklash() {
-            const res = await fetch('/admin/buyurtmalar');
-            const data = await res.json();
-            const list = document.getElementById('list');
-            if(!list) return;
-            list.innerHTML = '';
-            
-            // Xaritadagi eski markerlarni tozalash
-            Object.values(markers).forEach(m => map.removeLayer(m));
-            markers = {};
+    if (order && order.holati === 'Kutilmoqda') {
+        order.holati = "Yo'lda";
+        order.haydovchi = ctx.from.first_name;
+        saqlash(data);
+        io.emit('yangilash_chiqdi');
 
-            data.forEach(item => {
-                // Kutilayotganlarni xaritaga qo'yish
-                if(item.holati === 'Kutilmoqda') {
-                    markers[item._id] = L.marker([item.mijozLoc.lat, item.mijozLoc.lon]).addTo(map).bindPopup(item.mijoz);
-                }
+        ctx.editMessageText(`Muvaffaqiyatli qabul qilindi! ✅\nMijozga xabar yuborildi.`);
+        
+        // Mijozga stiker va xabar yuborish
+        bot.telegram.sendMessage(order.chatId, `Sizning buyurtmangizni ${ctx.from.first_name} ismli haydovchi qabul qildi! 🚖\nIltimos, kutib turing.`);
+    } else {
+        ctx.answerCbQuery('Bu buyurtma allaqachon olingan! ❌');
+    }
+});
 
-                if(currentRole === 'driver' && item.holati === 'Kutilmoqda') {
-                    list.innerHTML += `<div class="bg-gray-50 p-4 rounded-2xl flex justify-between items-center border">
-                        <div><b class="text-sm block">${item.yonalish}</b><span class="text-xs text-gray-400">${item.mijoz}</span></div>
-                        <button onclick="qabul('${item._id}')" class="bg-black text-white px-5 py-2 rounded-xl text-xs font-bold">OLISH</button>
-                    </div>`;
-                } else if(currentRole === 'admin') {
-                    list.innerHTML += `<div class="p-3 border-b flex justify-between items-center text-xs">
-                        <div><b>${item.mijoz}</b><br>${item.yonalish}</div>
-                        <span class="font-bold ${item.holati==='Kutilmoqda'?'text-orange-500':'text-green-600'}">${item.holati}</span>
-                    </div>`;
-                }
-            });
-        }
+bot.launch();
 
-        async function qabul(id) {
-            await fetch('/buyurtma/qabul', {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({ orderId:id, haydovchiIsm:userTel })
-            });
-            alert("Siz buyurtmani oldingiz!");
-            yuklash();
-        }
+// --- WEB SERVER ---
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, '.')));
 
-        socket.on('yangilash_chiqdi', yuklash);
-    </script>
-</body>
-</html>
+app.get('/admin/buyurtmalar', (req, res) => res.json(oqish().buyurtmalar));
+
+app.post('/admin/login', (req, res) => {
+    const { login, pass } = req.body;
+    if (login === ADMIN_CONF.login && pass === ADMIN_CONF.pass) res.json({ status: "ok" });
+    else res.status(401).json({ status: "error" });
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`Professional Taxi Server running on ${PORT}`));
