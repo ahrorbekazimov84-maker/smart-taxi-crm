@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Taxi Online - 12 Viloyat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    <style>
+        #map { height: 400px; width: 100%; border-radius: 15px; z-index: 1; border: 2px solid #ddd; position: relative; }
+        .leaflet-routing-container { display: none !important; }
+        .btn-hover:hover { transform: scale(1.05); transition: transform 0.2s; }
+        .fade-in { animation: fadeIn 0.5s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in { animation: fadeIn 0.5s ease-in; }
+        .btn-hover:hover { transform: scale(1.05); transition: transform 0.2s; }
+    </style>
+</head>
+<body class="bg-slate-50">
+
+    <nav class="bg-slate-900 text-white p-4 sticky top-0 z-[1000] shadow-xl flex justify-between items-center">
+        <h1 class="text-xl font-black italic text-yellow-400 uppercase">Viloyat Taxi</h1>
+        <div class="flex gap-4">
+            <button onclick="switchTab('orders')" class="text-sm font-bold">ADMIN</button>
+            <button onclick="switchTab('driver-panel')" class="bg-yellow-500 text-black px-4 py-1 rounded-full text-xs font-black">HAYDOVCHI</button>
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-4">
+        <div id="map" class="mb-6 shadow-lg">
+            <button onclick="centerMap()" class="absolute top-2 right-2 bg-white p-2 rounded shadow z-10">📍</button>
+        </div>
+
+        <div id="orders-section" class="tab-content">
+            <div class="grid lg:grid-cols-3 gap-6">
+                <div class="bg-white p-6 rounded-2xl shadow-lg border-t-8 border-blue-600">
+                    <h2 class="font-bold mb-4 text-lg">Yangi Buyurtma</h2>
+                    <input id="mijozIsmi" type="text" placeholder="Ismingizni kiriting" class="w-full p-4 border rounded-xl mb-4 outline-none focus:ring-2 ring-blue-500">
+                    <input id="mijozTel" type="tel" placeholder="Telefon raqamingizni kiriting" class="w-full p-4 border rounded-xl mb-4 outline-none focus:ring-2 ring-blue-500">                    <input id="mijozTel" type="tel" placeholder="Telefon raqamingiz" class="w-full p-4 border rounded-xl mb-4 outline-none focus:ring-2 ring-blue-500">                    
+                    <label class="text-xs font-bold text-gray-500 ml-1">YO'NALISHNI TANLANG:</label>
+                    <select id="yonalish" class="w-full p-4 border rounded-xl mb-6 bg-gray-50">
+                        <optgroup label="Toshkentdan (Borish)">
+                            <option value="Toshkent ➔ Samarqand">Toshkent ➔ Samarqand</option>
+                            <option value="Toshkent ➔ Andijon">Toshkent ➔ Andijon</option>
+                            <option value="Toshkent ➔ Farg'ona">Toshkent ➔ Farg'ona</option>
+                            <option value="Toshkent ➔ Namangan">Toshkent ➔ Namangan</option>
+                            <option value="Toshkent ➔ Buxoro">Toshkent ➔ Buxoro</option>
+                            <option value="Toshkent ➔ Qashqadaryo">Toshkent ➔ Qashqadaryo</option>
+                            <option value="Toshkent ➔ Surxondaryo">Toshkent ➔ Surxondaryo</option>
+                            <option value="Toshkent ➔ Jizzax">Toshkent ➔ Jizzax</option>
+                            <option value="Toshkent ➔ Sirdaryo">Toshkent ➔ Sirdaryo</option>
+                            <option value="Toshkent ➔ Navoiy">Toshkent ➔ Navoiy</option>
+                            <option value="Toshkent ➔ Xorazm">Toshkent ➔ Xorazm</option>
+                            <option value="Toshkent ➔ Qoraqalpog'iston">Toshkent ➔ Qoraqalpog'iston</option>
+                        </optgroup>
+                        <optgroup label="Toshkentga (Qaytish)">
+                            <option value="Samarqand ➔ Toshkent">Samarqand ➔ Toshkent</option>
+                            <option value="Andijon ➔ Toshkent">Andijon ➔ Toshkent</option>
+                            <option value="Farg'ona ➔ Toshkent">Farg'ona ➔ Toshkent</option>
+                            <option value="Namangan ➔ Toshkent">Namangan ➔ Toshkent</option>
+                            <option value="Buxoro ➔ Toshkent">Buxoro ➔ Toshkent</option>
+                            <option value="Qashqadaryo ➔ Toshkent">Qashqadaryo ➔ Toshkent</option>
+                            <option value="Surxondaryo ➔ Toshkent">Surxondaryo ➔ Toshkent</option>
+                            <option value="Jizzax ➔ Toshkent">Jizzax ➔ Toshkent</option>
+                            <option value="Sirdaryo ➔ Toshkent">Sirdaryo ➔ Toshkent</option>
+                            <option value="Navoiy ➔ Toshkent">Navoiy ➔ Toshkent</option>
+                            <option value="Xorazm ➔ Toshkent">Xorazm ➔ Toshkent</option>
+                            <option value="Qoraqalpog'iston ➔ Toshkent">Qoraqalpog'iston ➔ Toshkent</option>
+                        </optgroup>
+                    </select>
+                    
+                    <button onclick="buyurtmaYuborish()" class="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition shadow-lg btn-hover">TASDIQLASH</button>
+                </div>
+
+                <div class="lg:col-span-2 bg-white rounded-2xl shadow-lg overflow-hidden">
+                    <table class="w-full text-left">
+                        <thead class="bg-gray-100 border-b">
+                            <tr>
+                                <th class="p-4 text-xs font-bold text-gray-500 uppercase">Mijoz</th>
+                                <th class="p-4 text-xs font-bold text-gray-500 uppercase">Telefon</th>
+                                <th class="p-4 text-xs font-bold text-gray-500 uppercase">Yo'nalish</th>
+                                <th class="p-4 text-xs font-bold text-gray-500 uppercase">Holat</th>
+                                <th class="p-4 text-xs font-bold text-gray-500 uppercase">Amal</th>
+                                <th class="p-4 text-xs font-bold text-gray-500 uppercase">To'lov</th>
+                            </tr>
+                        </thead>
+                        <tbody id="buyurtmaTable" class="divide-y"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="driver-panel-section" class="tab-content hidden grid gap-6 md:grid-cols-2 lg:grid-cols-3"></div>
+    </div>
+
+    <script>
+        const socket = io();
+        let map = L.map('map').setView([41.2995, 69.2401], 7);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        let markers = [], routingControl, joriyHaydovchi = "";
+
+        // Request notification permission
+        if ('Notification' in window) {
+            Notification.requestPermission();
+        }
+
+        function switchTab(tab) {
+            if (tab === 'orders' && !sessionStorage.getItem('adminLogged')) {
+                const pass = prompt("Admin parol:");
+                if (pass !== 'admin123') {
+                    alert("Noto'g'ri parol");
+                    return;
+                }
+                sessionStorage.setItem('adminLogged', 'true');
+            }
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(tab + '-section').classList.remove('hidden');
+            if(tab === 'driver-panel' && !joriyHaydovchi) joriyHaydovchi = prompt("F.I.SH:");
+        }
+
+        async function buyurtmaYuborish() {
+            const ism = document.getElementById('mijozIsmi').value;
+            const tel = document.getElementById('mijozTel').value;
+            if(!ism || !tel) return alert("Ismingiz va telefon raqamingizni yozing!");
+            navigator.geolocation.getCurrentPosition(
+                (pos) => yubor({lat: pos.coords.latitude, lon: pos.coords.longitude}),
+                () => yubor({lat: 41.2995, lon: 69.2401})
+            );
+
+            function yubor(loc) {
+                fetch('/buyurtma/berish', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ ism, tel, yonalish: document.getElementById('yonalish').value, mijozLoc: loc })
+                }).then(() => { document.getElementById('mijozIsmi').value = ''; document.getElementById('mijozTel').value = ''; });
+            }
+        }
+
+        async function qabulQilish(id) {
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                const res = await fetch('/buyurtma/qabul', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ orderId: id, haydovchiIsm: joriyHaydovchi, haydovchiLoc: {lat: pos.coords.latitude, lon: pos.coords.longitude} })
+                });
+                const d = await res.json();
+                if(routingControl) map.removeControl(routingControl);
+                routingControl = L.Routing.control({
+                    waypoints: [L.latLng(pos.coords.latitude, pos.coords.longitude), L.latLng(d.mijozLoc.lat, d.mijozLoc.lon)],
+                    createMarker: () => null
+                }).addTo(map);
+                alert("Marshrut chizildi. Yo'lga chiqing!");
+                if (Notification.permission === 'granted') {
+                    new Notification('Buyurtma qabul qilindi!', { body: 'Yo\'lga chiqing' });
+                }
+            });
+        }
+
+        async function ochirish(id) { if(confirm("O'chirilsinmi?")) fetch(`/admin/buyurtma/${id}`, {method:'DELETE'}); }
+
+        function tolov(id) { alert('To\'lov integratsiyasi qo\'shiladi'); }
+
+        async function yuklash() {
+            const res = await fetch('/admin/buyurtmalar');
+            const data = await res.json();
+            const table = document.getElementById('buyurtmaTable');
+            const dPanel = document.getElementById('driver-panel-section');
+            table.innerHTML = ''; dPanel.innerHTML = '';
+            markers.forEach(m => map.removeLayer(m)); markers = [];
+
+            data.forEach(item => {
+                table.innerHTML += `<tr class="hover:bg-gray-50 transition fade-in"><td class="p-4 font-bold text-slate-700">${item.mijoz}</td><td class="p-4 text-xs font-medium text-blue-600">${item.tel || ''}</td><td class="p-4 text-xs font-medium text-blue-600">${item.yonalish}</td><td class="p-4"><span class="px-2 py-1 rounded-full text-[10px] font-bold ${item.holati === 'Kutilmoqda' ? 'bg-amber-100 text-amber-600' : 'bg-green-100 text-green-600'}">${item.holati}</span></td><td class="p-4"><button onclick="ochirish('${item._id}')" class="text-red-400 hover:text-red-600">❌</button></td><td class="p-4"><button onclick="tolov('${item._id}')" class="text-blue-400 hover:text-blue-600">💳</button></td></tr>`;
+
+                if(item.holati === 'Kutilmoqda') {
+                    if(item.mijozLoc) {
+                        let m = L.marker([item.mijozLoc.lat, item.mijozLoc.lon]).addTo(map).bindPopup(item.mijoz);
+                        markers.push(m);
+                    }
+                    dPanel.innerHTML += `<div class="bg-white p-5 rounded-2xl shadow-lg border-b-4 border-yellow-400">
+                        <h3 class="font-bold text-blue-700">${item.yonalish}</h3>
+                        <p class="text-sm text-gray-500 my-2">Mijoz: ${item.mijoz}</p>
+                        <button onclick="qabulQilish('${item._id}')" class="w-full bg-slate-900 text-yellow-400 py-2 rounded-xl font-bold uppercase tracking-wider btn-hover">Qabul Qilish</button>
+                    </div>`;
+                }
+            });
+        }
+
+        function centerMap() {
+            navigator.geolocation.getCurrentPosition(pos => {
+                map.setView([pos.coords.latitude, pos.coords.longitude], 15);
+            });
+        }
+
+        socket.on('yangilash_chiqdi', yuklash);
+        socket.on('yangi_buyurtma', (order) => {
+            if (Notification.permission === 'granted') {
+                new Notification('Yangi buyurtma!', {
+                    body: `${order.mijoz} - ${order.yonalish}`,
+                    icon: '/favicon.ico' // assuming there's an icon
+                });
+            }
+        });
+        window.onload = yuklash;
+    </script>
+</body>
+</html>
